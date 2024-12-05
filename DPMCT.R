@@ -1,8 +1,74 @@
+source("likelihoodEta.R")
 
-update_mu_tau_alpha <- function(theta, mu, tau, alpha, J,
+J <- 5
+y0 <- c(30,30,40,30,50)
+y1 <- c(30,40,50,60,70)
+n0 <- rep(100, J)
+n1 <- rep(100, J)
+### Check when eta = 0
+# MCMC start value
+eta <- rep(-1, J)
+mu <- rep(0, J)
+tau <- rep(1, J)
+alpha <- 2
+m <- 5
+
+# Prior specification
+a_pi <- 1
+b_pi <- 1
+mu_prior_mean <- 0
+mu_prior_sd <- 2
+a_tau <- 1
+b_tau <- 1
+a_alpha <- 1
+b_alpha <- 1
+# j <- 1
+
+update_eta(n0, y0, n1, y1, eta_current, a_pi, b_pi, mu_current, tau_current)
+
+
+update_eta <- function(n0, y0, n1, y1, eta, 
+                       a_pi, b_pi, mu, tau){
+  J <- length(y0)
+  if(length(y1) != J | length(n0) != J | length(n1) != J | length(mu) != J | length(tau) != J) stop("y0, y1, n0 and n1 must be of equal length!")
+  
+  for (j in 1:J) {
+    # Current value of eta at position j
+    eta_j_cur <- eta[j]
+    # Propose a new eta value from N(mu[j], tau[j]^2)
+    eta_j_pro <- rnorm(1, mean = mu[j], sd = tau[j])
+    
+    ## Prior Probability
+    logpost_cur <- dnorm(eta_j_cur, mean = mu[j], sd = tau[j], log = TRUE)
+    logpost_pro <- dnorm(eta_j_pro, mean = mu[j], sd = tau[j], log = TRUE)
+    
+    ## Likelihood
+    logpost_cur <- logpost_cur + log(Re(likelihoodEta(n0[j], y0[j], n1[j], y1[j], a_pi, b_pi, eta_j_cur)))
+    logpost_pro <- logpost_pro + log(Re(likelihoodEta(n0[j], y0[j], n1[j], y1[j], a_pi, b_pi, eta_j_pro)))
+    
+    # Metropolis-Hastings acceptance step
+    u <- runif(1)
+    if (log(u) < (logpost_pro - logpost_cur)) {
+      eta_j_new <- eta_j_pro
+    } else {
+      eta_j_new <- eta_j_cur
+    }
+    eta[j] <- eta_j_new
+    print(j)
+  }
+  
+  return(eta)
+}
+
+
+
+
+
+update_mu_tau <- function(theta, mu, tau, alpha,
                           mu_prior_mean, mu_prior_sd,
-                          a_tau, b_tau, a_alpha, b_alpha,
-                          m) {
+                          a_tau, b_tau, m) {
+  
+  J <- length(mu)
   # Initialize proposal vectors
   mu_pro <- numeric(m)
   tau_pro <- numeric(m)
@@ -147,7 +213,14 @@ update_mu_tau_alpha <- function(theta, mu, tau, alpha, J,
     }
   }
   
-  # Step 3: Update alpha
+  # Return the updated mu and tau
+  return(list(mu = mu, tau = tau))
+}
+
+
+
+
+update_alpha <- function(alpha, mu, tau, a_alpha, b_alpha){
   # Compute the number of clusters K
   cluster_labels <- unique(data.frame(mu = mu, tau = tau))
   K <- nrow(cluster_labels)
@@ -173,30 +246,79 @@ update_mu_tau_alpha <- function(theta, mu, tau, alpha, J,
   # Sample new alpha from Gamma distribution
   alpha <- rgamma(1, a_alpha_new, b_alpha_new)
   
-  # Return the updated mu and tau
-  return(list(mu = mu, tau = tau, alpha = alpha))
+  return(alpha)
 }
 
 
-
-# Example data
-set.seed(123)
-J <- 100
-theta <- rnorm(J, mean = 5, sd = 2)
-
-# Initial values
-mu <- rnorm(J, mean = 5, sd = 1)
-tau <- rgamma(J, shape = 2, rate = 1)
-alpha <- rgamma(1, shape = 1, rate = 1)
-mu_prior_mean <- 0
-mu_prior_sd <- 10
-a_tau <- 2
-b_tau <- 1
-a_alpha <- 1
-b_alpha <- 1
-m <- 5
-sd_prop <- 0.5
+## Single iteration
+# eta_updated <- update_eta(n0, y0, n1, y1, eta, a_pi, b_pi, mu, tau)
+# mu_tau_updated <- update_mu_tau(eta_updated, mu, tau, alpha,
+#                             mu_prior_mean, mu_prior_sd,
+#                             a_tau, b_tau, m)
+# mu_updated <- mu_tau_updated$mu
+# tau_updated <- mu_tau_updated$tau
+# alpha_updated <- update_alpha(alpha, mu_updated, tau_updated, a_alpha, b_alpha)
 
 
-result <- update_mu_tau_alpha(theta, mu, tau, alpha, J, mu_prior_mean, mu_prior_sd,
-                              a_tau, b_tau, a_alpha, b_alpha, m)
+eta_current <- eta
+mu_current <- mu
+tau_current <- tau
+alpha_current <- alpha
+num_iter <- 10000
+
+eta_samples <- matrix(NA, nrow = num_iter, ncol = J)
+mu_samples <- matrix(NA, nrow = num_iter, ncol = J)
+tau_samples <- matrix(NA, nrow = num_iter, ncol = J)
+alpha_samples <- numeric(num_iter)
+
+# for (iter in 1:num_iter) {
+#   eta_current <- update_eta(n0, y0, n1, y1, eta_current, a_pi, b_pi, mu_current, tau_current)
+#   eta_samples[iter, ] <- eta_current
+# }
+
+for (iter in 1:num_iter) {
+  # Update eta
+  eta_current <- update_eta(n0, y0, n1, y1, eta_current, a_pi, b_pi, mu_current, tau_current)
+  
+  # Update mu and tau
+  mu_tau_updated <- update_mu_tau(eta_current, mu_current, tau_current, alpha_current,
+                                  mu_prior_mean, mu_prior_sd, a_tau, b_tau, m)
+  mu_current <- mu_tau_updated$mu
+  tau_current <- mu_tau_updated$tau
+  
+  # Update alpha
+  alpha_current <- update_alpha(alpha_current, mu_current, tau_current, a_alpha, b_alpha)
+  
+  # Store samples
+  eta_samples[iter, ] <- eta_current
+  mu_samples[iter, ] <- mu_current
+  tau_samples[iter, ] <- tau_current
+  alpha_samples[iter] <- alpha_current
+}
+
+burn_in <- 9000
+
+posterior_samples <- eta_samples[(burn_in : num_iter),1]
+
+posterior_mean <- mean(posterior_samples)
+posterior_mode <- as.numeric(density(posterior_samples)$x[which.max(density(posterior_samples)$y)])
+
+
+hist(posterior_samples, breaks = 50, probability = TRUE, 
+     main = "Posterior Distribution with treatment(6/10), control(3/10)", xlab = "Parameter Value", 
+     col = "lightblue", border = "white")
+
+# Overlay density plot
+lines(density(posterior_samples), col = "blue", lwd = 2)
+
+# Add vertical lines for mean and mode
+abline(v = posterior_mean, col = "red", lwd = 2, lty = 2)  # Mean
+abline(v = posterior_mode, col = "green", lwd = 2, lty = 2)  # Mode
+
+# Add legend
+legend("topright", legend = c("Mean", "Mode"), 
+       col = c("red", "green"), lty = 2, lwd = 2, bty = "n")
+
+# Annotate the mean and mode
+text(posterior_mean, 0.05, labels = paste0("Mean = ", round(posterior_mean, 2)), col = "red", pos = 4)
+text(posterior_mode, 0.04, labels = paste0("Mode = ", round(posterior_mode, 2)), col = "green", pos = 4)
