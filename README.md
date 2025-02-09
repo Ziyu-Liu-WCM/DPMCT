@@ -1,1 +1,9 @@
 # DPMCT
+There are two versions of likelihood functions: likelihoodEta_hyp.R, likelihoodEta_inc.R, corresponding to the ones using hypergeometric functions and incomplete beta functions.
+
+The incomplete beta version is extremely unstable under large sample sizes(empirically > 30), but works well, and maybe better than the hypergeometric version under small sample sizes.
+
+To improve numerical stability, I worked out the hypergeometric version to cope with large sample sizes scenarios. It uses a manually defined log-transformed hypergeometric function thanks to ChatGPT. I'm not 100% percent sure it ouputs the correct likelihood but it did successfully do clustering under the simple simulation data.
+
+The code of sampling from a DPM came from RoBoT, with some modification. Please refer to the S1.4 for further detail: [RoBoT Supplementary](https://oup.silverchair-cdn.com/oup/backfile/Content_public/Journal/biostatistics/22/4/10.1093_biostatistics_kxaa005/1/kxaa005_supplementary_data.pdf?Expires=1739961443&Signature=mw1won-B0eBgGZ1GDY3EGP5Q2RvGbFm5z3slOW31ePDA~pfLVpC2MrssiCxtepCGnx2VBCjou-GxT2WjEHqtkZxpEw4recLk17eeAFJDcOGerrQcvxvhwdHRY~NrewNbH3Jv0rvdqbV6VQCNIQFNMcIE49uUkEiF1VB018mlKZrFLWMOpY-TrIwG3DAn9rCbJUR8X~nzV1QL9dzxGffpIRhQpQ-8ws2-XVfj7NZkR3ht-Bcz1T28j5w24XPnPCM~C~6ji1wEYJBB0eCLMuZEETFFuSjTVbtTTbqf8BS1j-afB5MGRqHLGn2qIsUkwpyQW5FpVfC1NPXyAw14CW~T2g__&Key-Pair-Id=APKAIE5G5CRDK6RD3PGA)
+My modification: (1) RoBoT's code of updating cluster labels are not correct so I replaced them with mine. (2)RoBoT uses a half-cauchy prior for tau but I use a gamma prior similar to your proposal. (3)Add the code of updating alpha.
